@@ -27,7 +27,7 @@ export function getSiteUrl(): string {
   }
 
   // Last resort fallback
-  return "https://mothapp.vercel.app"
+  return "https://malerjakt.vercel.app" // Replace with your expected production URL
 }
 
 // Check if we're in development mode

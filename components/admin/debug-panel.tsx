@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getSupabase } from "@/lib/supabase/client"
 import { updateObservationStatus } from "@/lib/api"
+import { directUpdateObservationStatus } from "@/lib/api-direct"
 import { Loader2 } from "lucide-react"
 
 export function DebugPanel() {
@@ -27,38 +28,55 @@ export function DebugPanel() {
     setResult(null)
 
     try {
-      // Test direct Supabase update
-      const { data, error: updateError } = await getSupabase()
-        .from("observations")
-        .update({
-          status: status,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq("id", observationId)
-        .select()
-
-      if (updateError) {
-        throw updateError
-      }
+      // Try the direct update method first (using RPC)
+      const directResult = await directUpdateObservationStatus(observationId, status)
 
       setResult({
-        message: "Direct update successful",
-        data,
+        message: "Direct RPC update successful",
+        data: directResult,
       })
-    } catch (err: any) {
-      console.error("Direct update error:", err)
-      setError(`Direct update failed: ${err.message || String(err)}`)
 
-      // Try using the API function as fallback
+      return
+    } catch (directErr: any) {
+      console.error("Direct RPC update error:", directErr)
+      setError(`Direct RPC update failed: ${directErr.message || String(directErr)}`)
+
+      // Try direct Supabase update as fallback
       try {
-        const updatedObs = await updateObservationStatus(observationId, status)
+        const { data, error: updateError } = await getSupabase()
+          .from("observations")
+          .update({
+            status: status,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", observationId)
+          .select()
+
+        if (updateError) {
+          throw updateError
+        }
+
         setResult({
-          message: "API update successful (fallback)",
-          data: updatedObs,
+          message: "Direct SQL update successful",
+          data,
         })
         setError(null)
-      } catch (apiErr: any) {
-        setError(`Both update methods failed. API error: ${apiErr.message || String(apiErr)}`)
+        return
+      } catch (err: any) {
+        console.error("Direct SQL update error:", err)
+        setError(`Direct SQL update failed: ${err.message || String(err)}`)
+
+        // Try using the API function as last resort
+        try {
+          const updatedObs = await updateObservationStatus(observationId, status)
+          setResult({
+            message: "API update successful (fallback)",
+            data: updatedObs,
+          })
+          setError(null)
+        } catch (apiErr: any) {
+          setError(`All update methods failed. API error: ${apiErr.message || String(apiErr)}`)
+        }
       }
     } finally {
       setIsLoading(false)

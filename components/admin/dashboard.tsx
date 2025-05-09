@@ -9,41 +9,11 @@ import { StatsPanel } from "@/components/admin/stats-panel"
 import { ExportPanel } from "@/components/admin/export-panel"
 import { LogoutButton } from "@/components/admin/logout-button"
 import { DebugPanel } from "@/components/admin/debug-panel"
-import { verifyDatabaseSetup } from "@/lib/supabase/verify-setup"
-import { toast } from "@/components/ui/use-toast"
+import { FixPoliciesButton } from "@/components/admin/fix-policies-button"
 
 export function AdminDashboard() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState("submissions")
-  const [isVerifying, setIsVerifying] = useState(false)
-
-  const handleVerifyDatabase = async () => {
-    setIsVerifying(true)
-    try {
-      const result = await verifyDatabaseSetup()
-      if (result.success) {
-        toast({
-          title: "Database Verified",
-          description: result.message,
-        })
-      } else {
-        toast({
-          title: "Verification Failed",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error verifying database:", error)
-      toast({
-        title: "Verification Error",
-        description: String(error),
-        variant: "destructive",
-      })
-    } finally {
-      setIsVerifying(false)
-    }
-  }
 
   return (
     <main className="flex min-h-screen flex-col">
@@ -51,9 +21,7 @@ export function AdminDashboard() {
         <div className="container flex h-16 items-center justify-between py-4">
           <h1 className="text-lg font-bold">Målerjakt Admin</h1>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleVerifyDatabase} disabled={isVerifying}>
-              {isVerifying ? "Verifying..." : "Verify Database"}
-            </Button>
+            <FixPoliciesButton />
             <LogoutButton />
           </div>
         </div>

@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { useTranslation } from "@/hooks/use-translation"
-import { fetchObservations, updateObservationStatus } from "@/lib/api"
+import { fetchObservations } from "@/lib/api"
+import { directUpdateObservationStatus } from "@/lib/api-direct"
 import { MapPin, Calendar, Clock, Smartphone, Check, X, AlertCircle, ExternalLink, Loader2 } from "lucide-react"
 import Image from "next/image"
 
@@ -70,7 +71,7 @@ export function SubmissionsList() {
     return date.toLocaleTimeString()
   }
 
-  // Update the updateStatus function to reload observations after a successful update
+  // Update the updateStatus function to use the direct update method
   const updateStatus = async (id: string, status: string) => {
     // Set loading state for this specific observation
     setUpdatingStatus((prev) => ({ ...prev, [id]: true }))
@@ -78,11 +79,10 @@ export function SubmissionsList() {
     try {
       console.log(`Updating observation ${id} to status: ${status}`)
 
-      // Call the API to update the status in the database
-      const updatedObservation = await updateObservationStatus(id, status)
-      console.log("Update successful, received:", updatedObservation)
+      // Call the direct update function
+      await directUpdateObservationStatus(id, status)
 
-      // Update the local state
+      // Update the local state immediately for better UX
       setObservations((prev) => prev.map((obs) => (obs.id === id ? { ...obs, status } : obs)))
 
       toast({

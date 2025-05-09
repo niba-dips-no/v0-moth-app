@@ -1,7 +1,5 @@
 # Målerjakt (Moth Hunt) - Citizen Science App
 
-![Målerjakt Logo](public/logo.svg)
-
 A modern, cross-platform web application for citizen science moth observation and tracking. This application allows users to capture and submit moth observations with geolocation data, view observations on a map, and participate in scientific research.
 
 ## 📱 Project Overview

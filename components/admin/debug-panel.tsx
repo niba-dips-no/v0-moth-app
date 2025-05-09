@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getSupabase } from "@/lib/supabase/client"
-import { updateObservationStatus } from "@/lib/api"
-import { directUpdateObservationStatus } from "@/lib/api-direct"
+import { simpleUpdateObservationStatus } from "@/lib/api-simple"
 import { Loader2 } from "lucide-react"
 
 export function DebugPanel() {
@@ -28,55 +27,39 @@ export function DebugPanel() {
     setResult(null)
 
     try {
-      // Try the direct update method first (using RPC)
-      const directResult = await directUpdateObservationStatus(observationId, status)
+      // Try the simple update method
+      const data = await simpleUpdateObservationStatus(observationId, status)
 
       setResult({
-        message: "Direct RPC update successful",
-        data: directResult,
+        message: "Update successful",
+        data,
       })
+    } catch (err: any) {
+      console.error("Update error:", err)
+      setError(`Update failed: ${err.message || String(err)}`)
 
-      return
-    } catch (directErr: any) {
-      console.error("Direct RPC update error:", directErr)
-      setError(`Direct RPC update failed: ${directErr.message || String(directErr)}`)
-
-      // Try direct Supabase update as fallback
+      // Try direct SQL as a fallback
       try {
+        // Try a minimal update with just the status field
         const { data, error: updateError } = await getSupabase()
           .from("observations")
           .update({
             status: status,
-            reviewed_at: new Date().toISOString(),
           })
           .eq("id", observationId)
-          .select()
+          .select("id, status")
 
         if (updateError) {
           throw updateError
         }
 
         setResult({
-          message: "Direct SQL update successful",
+          message: "Minimal update successful (fallback)",
           data,
         })
         setError(null)
-        return
-      } catch (err: any) {
-        console.error("Direct SQL update error:", err)
-        setError(`Direct SQL update failed: ${err.message || String(err)}`)
-
-        // Try using the API function as last resort
-        try {
-          const updatedObs = await updateObservationStatus(observationId, status)
-          setResult({
-            message: "API update successful (fallback)",
-            data: updatedObs,
-          })
-          setError(null)
-        } catch (apiErr: any) {
-          setError(`All update methods failed. API error: ${apiErr.message || String(apiErr)}`)
-        }
+      } catch (sqlErr: any) {
+        setError(`All update methods failed. SQL error: ${sqlErr.message || String(sqlErr)}`)
       }
     } finally {
       setIsLoading(false)

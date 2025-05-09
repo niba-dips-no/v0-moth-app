@@ -9,7 +9,7 @@ import { StatsPanel } from "@/components/admin/stats-panel"
 import { ExportPanel } from "@/components/admin/export-panel"
 import { LogoutButton } from "@/components/admin/logout-button"
 import { DebugPanel } from "@/components/admin/debug-panel"
-import { FixPoliciesButton } from "@/components/admin/fix-policies-button"
+import { SqlInstructions } from "@/components/admin/sql-instructions"
 
 export function AdminDashboard() {
   const { t } = useTranslation()
@@ -21,7 +21,6 @@ export function AdminDashboard() {
         <div className="container flex h-16 items-center justify-between py-4">
           <h1 className="text-lg font-bold">Målerjakt Admin</h1>
           <div className="flex gap-2">
-            <FixPoliciesButton />
             <LogoutButton />
           </div>
         </div>
@@ -34,6 +33,7 @@ export function AdminDashboard() {
               <TabsTrigger value="submissions">{t("submissions")}</TabsTrigger>
               <TabsTrigger value="stats">{t("statistics")}</TabsTrigger>
               <TabsTrigger value="export">{t("export")}</TabsTrigger>
+              <TabsTrigger value="database">Database Fix</TabsTrigger>
             </TabsList>
 
             {activeTab === "export" && <Button>{t("exportGeojson")}</Button>}
@@ -50,6 +50,10 @@ export function AdminDashboard() {
 
           <TabsContent value="export">
             <ExportPanel />
+          </TabsContent>
+
+          <TabsContent value="database">
+            <SqlInstructions />
           </TabsContent>
         </Tabs>
       </div>

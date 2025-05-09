@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast"
 import { useTranslation } from "@/hooks/use-translation"
 import { fetchObservations } from "@/lib/api"
-import { directUpdateObservationStatus } from "@/lib/api-direct"
+import { simpleUpdateObservationStatus } from "@/lib/api-simple"
 import { MapPin, Calendar, Clock, Smartphone, Check, X, AlertCircle, ExternalLink, Loader2 } from "lucide-react"
 import Image from "next/image"
 
@@ -71,7 +71,7 @@ export function SubmissionsList() {
     return date.toLocaleTimeString()
   }
 
-  // Update the updateStatus function to use the direct update method
+  // Update the updateStatus function to use the simple update method
   const updateStatus = async (id: string, status: string) => {
     // Set loading state for this specific observation
     setUpdatingStatus((prev) => ({ ...prev, [id]: true }))
@@ -79,8 +79,8 @@ export function SubmissionsList() {
     try {
       console.log(`Updating observation ${id} to status: ${status}`)
 
-      // Call the direct update function
-      await directUpdateObservationStatus(id, status)
+      // Call the simple update function
+      await simpleUpdateObservationStatus(id, status)
 
       // Update the local state immediately for better UX
       setObservations((prev) => prev.map((obs) => (obs.id === id ? { ...obs, status } : obs)))

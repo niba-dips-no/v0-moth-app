@@ -8,6 +8,17 @@ const translations = {
     viewMap: "View Map",
     subscribeToNewsletter: "Subscribe to Newsletter",
 
+    // Map related
+    map: "Map",
+    satellite: "Satellite",
+    heatmap: "Heatmap",
+    observationMap: "Observation Map",
+    viewOnMap: "View on Map",
+    satelliteViewComingSoon: "Satellite view coming soon",
+    heatmapComingSoon: "Heatmap view coming soon",
+    addObservation: "Add Observation",
+    back: "Back",
+
     // Notifications
     noNetworkTitle: "No Network",
     noNetworkDescription: "You are currently offline. Some features may not work.",
@@ -49,6 +60,17 @@ const translations = {
     history: "Historikk",
     viewMap: "Vis Kart",
     subscribeToNewsletter: "Abonner på Nyhetsbrev",
+
+    // Map related
+    map: "Kart",
+    satellite: "Satellitt",
+    heatmap: "Varmekart",
+    observationMap: "Observasjonskart",
+    viewOnMap: "Vis på kart",
+    satelliteViewComingSoon: "Satellittvisning kommer snart",
+    heatmapComingSoon: "Varmekart kommer snart",
+    addObservation: "Legg til observasjon",
+    back: "Tilbake",
 
     // Notifications
     noNetworkTitle: "Ingen Nettverk",

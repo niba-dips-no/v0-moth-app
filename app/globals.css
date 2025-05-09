@@ -57,3 +57,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Fix for Leaflet marker icons in Next.js */
+.leaflet-default-icon-path {
+  background-image: url("https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png");
+}
+
+.leaflet-control-attribution {
+  font-size: 9px !important;
+}

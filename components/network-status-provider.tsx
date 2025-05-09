@@ -14,6 +14,9 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
   const [isOnline, setIsOnline] = useState(true)
 
   useEffect(() => {
+    // Check if we're in a browser environment
+    if (typeof window === "undefined") return
+
     // Set initial state
     setIsOnline(navigator.onLine)
 

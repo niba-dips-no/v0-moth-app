@@ -8,8 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { useTranslation } from "@/hooks/use-translation"
-import { fetchObservations } from "@/lib/api"
-import { MapPin, Calendar, Clock, Smartphone, Check, X, AlertCircle, ExternalLink } from "lucide-react"
+import { fetchObservations, updateObservationStatus } from "@/lib/api"
+import { MapPin, Calendar, Clock, Smartphone, Check, X, AlertCircle, ExternalLink, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 interface Observation {
@@ -37,26 +37,28 @@ export function SubmissionsList() {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedObservation, setSelectedObservation] = useState<Observation | null>(null)
   const [filter, setFilter] = useState("all")
+  const [updatingStatus, setUpdatingStatus] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    const loadObservations = async () => {
-      try {
-        const data = await fetchObservations()
-        setObservations(data)
-      } catch (error) {
-        console.error("Error fetching observations:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load observations",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     loadObservations()
   }, [toast])
+
+  const loadObservations = async () => {
+    try {
+      setIsLoading(true)
+      const data = await fetchObservations()
+      setObservations(data)
+    } catch (error) {
+      console.error("Error fetching observations:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load observations",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -68,17 +70,36 @@ export function SubmissionsList() {
     return date.toLocaleTimeString()
   }
 
-  const updateStatus = (id: string, status: string) => {
-    setObservations((prev) => prev.map((obs) => (obs.id === id ? { ...obs, status } : obs)))
+  const updateStatus = async (id: string, status: string) => {
+    // Set loading state for this specific observation
+    setUpdatingStatus((prev) => ({ ...prev, [id]: true }))
 
-    toast({
-      title: "Status Updated",
-      description: `Observation ${id} marked as ${status}`,
-    })
+    try {
+      // Call the API to update the status in the database
+      await updateObservationStatus(id, status)
 
-    // Close dialog if open
-    if (selectedObservation?.id === id) {
-      setSelectedObservation(null)
+      // Update the local state
+      setObservations((prev) => prev.map((obs) => (obs.id === id ? { ...obs, status } : obs)))
+
+      toast({
+        title: "Status Updated",
+        description: `Observation ${id} marked as ${status}`,
+      })
+
+      // Close dialog if open
+      if (selectedObservation?.id === id) {
+        setSelectedObservation(null)
+      }
+    } catch (error) {
+      console.error("Error updating status:", error)
+      toast({
+        title: "Update Failed",
+        description: `Could not update observation status: ${error}`,
+        variant: "destructive",
+      })
+    } finally {
+      // Clear loading state
+      setUpdatingStatus((prev) => ({ ...prev, [id]: false }))
     }
   }
 
@@ -89,22 +110,29 @@ export function SubmissionsList() {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">{t("submissions")}</h2>
 
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="Approved">Approved</SelectItem>
-            <SelectItem value="Rejected">Rejected</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={loadObservations} disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Refresh
+          </Button>
+
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="Approved">Approved</SelectItem>
+              <SelectItem value="Rejected">Rejected</SelectItem>
+              <SelectItem value="Pending">Pending</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <p>Loading...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : filteredObservations.length === 0 ? (
         <Card>
@@ -263,25 +291,46 @@ export function SubmissionsList() {
                                 variant="default"
                                 size="sm"
                                 onClick={() => updateStatus(selectedObservation.id, "Approved")}
-                                disabled={selectedObservation.status === "Approved"}
+                                disabled={
+                                  selectedObservation.status === "Approved" || updatingStatus[selectedObservation.id]
+                                }
                               >
-                                <Check className="h-4 w-4 mr-2" /> Approve
+                                {updatingStatus[selectedObservation.id] ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Check className="h-4 w-4 mr-2" />
+                                )}
+                                Approve
                               </Button>
                               <Button
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => updateStatus(selectedObservation.id, "Rejected")}
-                                disabled={selectedObservation.status === "Rejected"}
+                                disabled={
+                                  selectedObservation.status === "Rejected" || updatingStatus[selectedObservation.id]
+                                }
                               >
-                                <X className="h-4 w-4 mr-2" /> Reject
+                                {updatingStatus[selectedObservation.id] ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <X className="h-4 w-4 mr-2" />
+                                )}
+                                Reject
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => updateStatus(selectedObservation.id, "Pending")}
-                                disabled={selectedObservation.status === "Pending"}
+                                disabled={
+                                  selectedObservation.status === "Pending" || updatingStatus[selectedObservation.id]
+                                }
                               >
-                                <AlertCircle className="h-4 w-4 mr-2" /> Mark as Pending
+                                {updatingStatus[selectedObservation.id] ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <AlertCircle className="h-4 w-4 mr-2" />
+                                )}
+                                Mark as Pending
                               </Button>
                             </div>
                           </div>
@@ -296,9 +345,13 @@ export function SubmissionsList() {
                       size="sm"
                       className="h-8 w-8 p-0"
                       onClick={() => updateStatus(observation.id, "Approved")}
-                      disabled={observation.status === "Approved"}
+                      disabled={observation.status === "Approved" || updatingStatus[observation.id]}
                     >
-                      <Check className="h-4 w-4" />
+                      {updatingStatus[observation.id] ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
                       <span className="sr-only">Approve</span>
                     </Button>
                     <Button
@@ -306,9 +359,13 @@ export function SubmissionsList() {
                       size="sm"
                       className="h-8 w-8 p-0"
                       onClick={() => updateStatus(observation.id, "Rejected")}
-                      disabled={observation.status === "Rejected"}
+                      disabled={observation.status === "Rejected" || updatingStatus[observation.id]}
                     >
-                      <X className="h-4 w-4" />
+                      {updatingStatus[observation.id] ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <X className="h-4 w-4" />
+                      )}
                       <span className="sr-only">Reject</span>
                     </Button>
                   </div>
@@ -321,3 +378,6 @@ export function SubmissionsList() {
     </div>
   )
 }
+
+// Import the RefreshCw icon
+import { RefreshCw } from "lucide-react"

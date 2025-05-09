@@ -29,8 +29,8 @@ export function HomeScreen() {
       />
 
       <div className="w-full max-w-md flex flex-col items-center gap-6 mt-8">
-        <div className="relative w-full aspect-square max-w-xs">
-          <Image src="/logo.svg" alt="Målerjakt Logo" fill className="object-contain" priority />
+        <div className="relative w-full aspect-square max-w-[96px]">
+          <Image src="/malerjakt-logo.png" alt="Målerjakt Logo" fill className="object-contain" priority />
         </div>
 
         <h1 className="text-3xl font-bold text-center">{t("appName")}</h1>

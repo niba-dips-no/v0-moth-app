@@ -94,36 +94,36 @@ NEXT_PUBLIC_APP_URL=your_app_url
 
 ## 📂 Project Structure
 
-\`\`\`
+\`\`\`text
 malerjakt/
-├── app/                    # Next.js app directory
-│   ├── admin/              # Admin dashboard
-│   ├── camera/             # Camera page
-│   ├── gallery/            # Gallery selection page
-│   ├── history/            # Observation history
-│   ├── info/               # Information pages
-│   ├── map/                # Map visualization
-│   ├── subscribe/          # Newsletter subscription
-│   ├── layout.tsx          # Root layout
-│   └── page.tsx            # Home page
-├── components/             # React components
-│   ├── admin/              # Admin components
-│   ├── history/            # History components
-│   ├── map/                # Map components
-│   ├── ui/                 # UI components (shadcn)
-│   └── ...                 # Other components
-├── hooks/                  # Custom React hooks
-├── lib/                    # Utility functions
-│   ├── api.ts              # API functions
-│   ├── supabase/           # Supabase client and types
-│   ├── translations.ts     # Internationalization
-│   └── ...                 # Other utilities
-├── public/                 # Static assets
-├── supabase/               # Supabase setup scripts
-├── capacitor.config.ts     # Capacitor configuration
-├── next.config.mjs         # Next.js configuration
-├── tailwind.config.ts      # Tailwind CSS configuration
-└── package.json            # Project dependencies
+├── app/                      # Next.js app directory
+│   ├── admin/               # Admin dashboard
+│   ├── camera/              # Camera page
+│   ├── gallery/             # Gallery selection page
+│   ├── history/             # Observation history
+│   ├── info/                # Information pages
+│   ├── map/                 # Map visualization
+│   ├── subscribe/           # Newsletter subscription
+│   ├── layout.tsx           # Root layout
+│   └── page.tsx             # Home page
+├── components/              # React components
+│   ├── admin/               # Admin components
+│   ├── history/             # History components
+│   ├── map/                 # Map components
+│   ├── ui/                  # UI components (shadcn)
+│   └── ...                  # Other components
+├── hooks/                   # Custom React hooks
+├── lib/                     # Utility functions
+│   ├── api.ts               # API functions
+│   ├── supabase/            # Supabase client and types
+│   ├── translations.ts      # Internationalization
+│   └── ...                  # Other utilities
+├── public/                  # Static assets
+├── supabase/                # Supabase setup scripts
+├── capacitor.config.ts      # Capacitor configuration
+├── next.config.mjs          # Next.js configuration
+├── tailwind.config.ts       # Tailwind CSS configuration
+└── package.json             # Project dependencies
 \`\`\`
 
 ## 🔑 Key Features Implemented

@@ -15,9 +15,6 @@ const LOCAL_OBSERVATIONS_KEY = "malerjakt_observations"
 
 export async function saveLocalObservation(observation: LocalObservation): Promise<void> {
   try {
-    // Check if we're in a browser environment
-    if (typeof window === "undefined") return
-
     // Get existing observations
     const existingObservations = await getLocalObservations()
 
@@ -34,7 +31,6 @@ export async function saveLocalObservation(observation: LocalObservation): Promi
 
 export async function getLocalObservations(): Promise<LocalObservation[]> {
   try {
-    // Check if we're in a browser environment
     if (typeof window === "undefined") return []
 
     const data = localStorage.getItem(LOCAL_OBSERVATIONS_KEY)
@@ -47,9 +43,6 @@ export async function getLocalObservations(): Promise<LocalObservation[]> {
 
 export async function clearLocalObservations(): Promise<void> {
   try {
-    // Check if we're in a browser environment
-    if (typeof window === "undefined") return
-
     localStorage.removeItem(LOCAL_OBSERVATIONS_KEY)
   } catch (error) {
     console.error("Error clearing local observations:", error)
@@ -59,9 +52,6 @@ export async function clearLocalObservations(): Promise<void> {
 
 export async function removeLocalObservation(id: string): Promise<void> {
   try {
-    // Check if we're in a browser environment
-    if (typeof window === "undefined") return
-
     const observations = await getLocalObservations()
     const updatedObservations = observations.filter((obs) => obs.id !== id)
     localStorage.setItem(LOCAL_OBSERVATIONS_KEY, JSON.stringify(updatedObservations))

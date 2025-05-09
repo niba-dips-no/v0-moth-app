@@ -22,8 +22,6 @@ export default function CameraPage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -45,8 +43,8 @@ export default function CameraPage() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
         },
       })
 
@@ -84,25 +82,10 @@ export default function CameraPage() {
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-        // Convert canvas to data URL (JPEG format, 0.8 quality)
-        try {
-          const imageDataUrl = canvas.toDataURL("image/jpeg", 0.8)
-          console.log("Image captured, size:", Math.round(imageDataUrl.length / 1024), "KB")
-          setCapturedImage(imageDataUrl)
-          setIsCameraOpen(false)
-
-          // Set debug info
-          setDebugInfo(
-            `Image captured: ${Math.round(imageDataUrl.length / 1024)} KB, format: ${imageDataUrl.substring(0, 30)}...`,
-          )
-        } catch (error) {
-          console.error("Error converting canvas to data URL:", error)
-          toast({
-            title: "Error",
-            description: "Failed to process the captured image.",
-            variant: "destructive",
-          })
-        }
+        // Convert canvas to data URL
+        const imageDataUrl = canvas.toDataURL("image/jpeg", 0.8)
+        setCapturedImage(imageDataUrl)
+        setIsCameraOpen(false)
       }
     }
   }
@@ -127,8 +110,6 @@ export default function CameraPage() {
     }
 
     setIsSubmitting(true)
-    setUploadProgress(10)
-    setDebugInfo("Starting submission process...")
 
     try {
       const timestamp = new Date().toISOString()
@@ -144,9 +125,6 @@ export default function CameraPage() {
         language: navigator.language,
       }
 
-      setUploadProgress(30)
-      setDebugInfo("Preparing observation data...")
-
       // Create observation object
       const observation = {
         image: capturedImage,
@@ -156,26 +134,8 @@ export default function CameraPage() {
         deviceInfo,
       }
 
-      console.log("Submitting observation...")
-      setDebugInfo("Uploading to Supabase...")
-
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          const newProgress = Math.min(prev + 5, 90)
-          return newProgress
-        })
-      }, 300)
-
       // Submit to Supabase
       const { id, imageUrl } = await submitObservation(observation)
-
-      clearInterval(progressInterval)
-      setUploadProgress(95)
-      setDebugInfo(`Observation submitted, ID: ${id}, saving locally...`)
-
-      console.log("Observation submitted successfully, ID:", id)
-      console.log("Image URL:", imageUrl)
 
       // Save to local storage for history
       await saveLocalObservation({
@@ -186,9 +146,6 @@ export default function CameraPage() {
         geolocation,
         status: "Pending",
       })
-
-      setUploadProgress(100)
-      setDebugInfo("Submission complete!")
 
       toast({
         title: t("submissionSuccess"),
@@ -201,7 +158,6 @@ export default function CameraPage() {
       router.push("/")
     } catch (error) {
       console.error("Submission error:", error)
-      setDebugInfo(`Error: ${String(error)}`)
       toast({
         title: t("submissionError"),
         description: String(error),
@@ -260,26 +216,6 @@ export default function CameraPage() {
           )}
 
           <canvas ref={canvasRef} className="hidden" />
-
-          {uploadProgress > 0 && uploadProgress < 100 && (
-            <div className="w-full mt-4">
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all duration-300 ease-in-out"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-              <p className="text-xs text-center mt-1 text-muted-foreground">
-                {uploadProgress}% - {uploadProgress < 50 ? "Uploading image..." : "Processing..."}
-              </p>
-            </div>
-          )}
-
-          {debugInfo && (
-            <div className="mt-4 p-2 bg-muted rounded-md">
-              <p className="text-xs text-muted-foreground break-words">{debugInfo}</p>
-            </div>
-          )}
         </CardContent>
 
         <CardFooter className="flex justify-between">

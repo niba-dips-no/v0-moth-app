@@ -202,15 +202,19 @@ export async function updateObservationStatus(id: string, status: string) {
       })
       .eq("id", id)
       .select()
-      .single()
 
     if (error) {
       console.error("Error updating observation status:", error)
       throw error
     }
 
-    console.log("Observation status updated successfully:", data)
-    return data
+    if (!data || data.length === 0) {
+      console.error("No data returned after update")
+      throw new Error("Failed to update observation status - no data returned")
+    }
+
+    console.log("Observation status updated successfully:", data[0])
+    return data[0]
   } catch (error) {
     console.error("Error updating observation status:", error)
     throw error

@@ -70,26 +70,35 @@ export function SubmissionsList() {
     return date.toLocaleTimeString()
   }
 
+  // Update the updateStatus function to reload observations after a successful update
   const updateStatus = async (id: string, status: string) => {
     // Set loading state for this specific observation
     setUpdatingStatus((prev) => ({ ...prev, [id]: true }))
 
     try {
+      console.log(`Updating observation ${id} to status: ${status}`)
+
       // Call the API to update the status in the database
-      await updateObservationStatus(id, status)
+      const updatedObservation = await updateObservationStatus(id, status)
+      console.log("Update successful, received:", updatedObservation)
 
       // Update the local state
       setObservations((prev) => prev.map((obs) => (obs.id === id ? { ...obs, status } : obs)))
 
       toast({
         title: "Status Updated",
-        description: `Observation ${id} marked as ${status}`,
+        description: `Observation ${id.substring(0, 8)}... marked as ${status}`,
       })
 
       // Close dialog if open
       if (selectedObservation?.id === id) {
         setSelectedObservation(null)
       }
+
+      // Reload observations to ensure we have the latest data
+      setTimeout(() => {
+        loadObservations()
+      }, 1000)
     } catch (error) {
       console.error("Error updating status:", error)
       toast({

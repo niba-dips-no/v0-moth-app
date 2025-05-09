@@ -13,13 +13,7 @@ import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import dynamic from "next/dynamic"
-
-// Dynamically import the MiniMap component with SSR disabled
-const MiniMap = dynamic(() => import("@/components/map/mini-map").then((mod) => mod.MiniMap), {
-  ssr: false,
-  loading: () => <Skeleton className="w-full h-[300px] rounded-md" />,
-})
+import { StaticMap } from "@/components/map/static-map"
 
 interface Observation extends LocalObservation {
   source: "local" | "remote"
@@ -267,10 +261,9 @@ export function HistoryContent() {
                       <DialogTitle>{observation.comment}</DialogTitle>
                     </DialogHeader>
                     <div className="h-[300px]">
-                      <MiniMap
+                      <StaticMap
                         latitude={observation.geolocation.latitude}
                         longitude={observation.geolocation.longitude}
-                        accuracy={observation.geolocation.accuracy}
                         height="100%"
                         zoom={14}
                       />

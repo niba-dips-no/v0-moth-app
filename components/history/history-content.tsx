@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTranslation } from "@/hooks/use-translation"
 import { useToast } from "@/components/ui/use-toast"
 import { fetchObservations } from "@/lib/api"
-import { getLocalObservations, updateLocalObservation, type LocalObservation } from "@/lib/local-storage"
+import { getLocalObservations, type LocalObservation } from "@/lib/local-storage"
 import { MapPin, Calendar, Clock, WifiOff, ImageOff, Map, RefreshCw, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -13,7 +13,13 @@ import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { StaticMap } from "@/components/map/static-map"
+import dynamic from "next/dynamic"
+
+// Dynamically import the MiniMap component with SSR disabled
+const MiniMap = dynamic(() => import("@/components/map/mini-map").then((mod) => mod.MiniMap), {
+  ssr: false,
+  loading: () => <Skeleton className="w-full h-[300px] rounded-md" />,
+})
 
 interface Observation extends LocalObservation {
   source: "local" | "remote"
@@ -58,17 +64,6 @@ export function HistoryContent() {
             ...obs,
             source: "remote" as const,
           }))
-
-          // Update local storage with remote data to keep them in sync
-          for (const remoteObs of remoteObs) {
-            const localObs = localObservations.find((obs) => obs.id === remoteObs.id)
-            if (localObs && localObs.status !== remoteObs.status) {
-              // Update local storage with the remote status
-              await updateLocalObservation(remoteObs.id, {
-                status: remoteObs.status,
-              })
-            }
-          }
         } catch (error) {
           console.error("Error fetching remote observations:", error)
           // Continue with local observations only
@@ -139,18 +134,6 @@ export function HistoryContent() {
     setImageErrors((prev) => ({ ...prev, [id]: true }))
   }
 
-  // Function to get the appropriate badge variant based on status
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "Approved":
-        return "default"
-      case "Rejected":
-        return "destructive"
-      default:
-        return "outline"
-    }
-  }
-
   return (
     <div className="w-full max-w-md">
       <div className="flex justify-between items-center mb-4">
@@ -202,15 +185,12 @@ export function HistoryContent() {
               <CardHeader className="p-4 pb-0">
                 <CardTitle className="text-lg flex justify-between items-center">
                   <span className="truncate">{observation.comment}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={getStatusBadgeVariant(observation.status)}>{observation.status}</Badge>
-                    {observation.source === "local" && !isOnline && (
-                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                        <WifiOff className="h-3 w-3 mr-1" />
-                        {t("localOnly")}
-                      </Badge>
-                    )}
-                  </div>
+                  {observation.source === "local" && !isOnline && (
+                    <Badge variant="outline" className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
+                      <WifiOff className="h-3 w-3 mr-1" />
+                      {t("localOnly")}
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4">
@@ -227,6 +207,9 @@ export function HistoryContent() {
                       onError={() => handleImageError(observation.id)}
                     />
                   )}
+                  <div className="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded-md text-xs">
+                    {observation.status}
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 text-sm">
@@ -261,9 +244,10 @@ export function HistoryContent() {
                       <DialogTitle>{observation.comment}</DialogTitle>
                     </DialogHeader>
                     <div className="h-[300px]">
-                      <StaticMap
+                      <MiniMap
                         latitude={observation.geolocation.latitude}
                         longitude={observation.geolocation.longitude}
+                        accuracy={observation.geolocation.accuracy}
                         height="100%"
                         zoom={14}
                       />

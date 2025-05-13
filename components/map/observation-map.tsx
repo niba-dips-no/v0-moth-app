@@ -1,16 +1,19 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
+import "leaflet/dist/leaflet.css"
+import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css"
+import "leaflet-defaulticon-compatibility"
 import { fetchObservations } from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { MapPin, Calendar, ExternalLink } from "lucide-react"
+import { Calendar, MapPin, ExternalLink } from "lucide-react"
 import { useTranslation } from "@/hooks/use-translation"
-import { StaticMap } from "./static-map"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import L from "leaflet"
 
 // Types
 interface Observation {
@@ -26,56 +29,66 @@ interface Observation {
   status: string
 }
 
+// Recenter map component
+function RecenterAutomatically({ observations }: { observations: Observation[] }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (observations.length > 0) {
+      // Create bounds from all observation points
+      const latLngs = observations.map((obs) => [obs.geolocation.latitude, obs.geolocation.longitude])
+      const bounds = L.latLngBounds(latLngs.map((coords) => L.latLng(coords[0], coords[1])))
+
+      // Add some padding
+      map.fitBounds(bounds.pad(0.1))
+    }
+  }, [observations, map])
+
+  return null
+}
+
 export function ObservationMap({ height = "500px" }: { height?: string }) {
   const { t } = useTranslation()
   const { toast } = useToast()
   const router = useRouter()
   const [observations, setObservations] = useState<Observation[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedObservation, setSelectedObservation] = useState<Observation | null>(null)
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 59.9139, lng: 10.7522 }) // Oslo, Norway
+  const [mapReady, setMapReady] = useState(false)
+
+  // Default center (Oslo, Norway)
+  const defaultCenter = [59.9139, 10.7522]
 
   useEffect(() => {
+    const loadObservations = async () => {
+      try {
+        setIsLoading(true)
+        const data = await fetchObservations()
+
+        // Filter out observations without valid coordinates
+        const validObservations = data.filter(
+          (obs) =>
+            obs.geolocation &&
+            obs.geolocation.latitude &&
+            obs.geolocation.longitude &&
+            !isNaN(obs.geolocation.latitude) &&
+            !isNaN(obs.geolocation.longitude),
+        )
+
+        setObservations(validObservations)
+      } catch (error) {
+        console.error("Error fetching observations for map:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load map data",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     loadObservations()
   }, [toast])
-
-  const loadObservations = async () => {
-    try {
-      setIsLoading(true)
-      const data = await fetchObservations()
-
-      // Filter out observations without valid coordinates
-      const validObservations = data.filter(
-        (obs) =>
-          obs.geolocation &&
-          obs.geolocation.latitude &&
-          obs.geolocation.longitude &&
-          !isNaN(obs.geolocation.latitude) &&
-          !isNaN(obs.geolocation.longitude),
-      )
-
-      setObservations(validObservations)
-
-      // Calculate center of all observations
-      if (validObservations.length > 0) {
-        const sumLat = validObservations.reduce((sum, obs) => sum + obs.geolocation.latitude, 0)
-        const sumLng = validObservations.reduce((sum, obs) => sum + obs.geolocation.longitude, 0)
-        setMapCenter({
-          lat: sumLat / validObservations.length,
-          lng: sumLng / validObservations.length,
-        })
-      }
-    } catch (error) {
-      console.error("Error fetching observations for map:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load map data",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -83,11 +96,9 @@ export function ObservationMap({ height = "500px" }: { height?: string }) {
     return date.toLocaleDateString()
   }
 
-  const handleMarkerClick = (id: string) => {
-    const observation = observations.find((obs) => obs.id === id)
-    if (observation) {
-      setSelectedObservation(observation)
-    }
+  // Handle when map is ready
+  const handleMapReady = () => {
+    setMapReady(true)
   }
 
   if (isLoading) {
@@ -104,32 +115,29 @@ export function ObservationMap({ height = "500px" }: { height?: string }) {
           </div>
         </div>
       ) : (
-        <>
-          <StaticMap
-            latitude={mapCenter.lat}
-            longitude={mapCenter.lng}
-            height={height}
-            width="100%"
-            markers={observations.map((obs) => ({
-              id: obs.id,
-              latitude: obs.geolocation.latitude,
-              longitude: obs.geolocation.longitude,
-            }))}
-            onMarkerClick={handleMarkerClick}
+        <MapContainer
+          center={defaultCenter as [number, number]}
+          zoom={5}
+          style={{ height: "100%", width: "100%" }}
+          whenReady={handleMapReady}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <Dialog open={!!selectedObservation} onOpenChange={(open) => !open && setSelectedObservation(null)}>
-            <DialogContent className="sm:max-w-md">
-              {selectedObservation && (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>{selectedObservation.comment}</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden">
+          {mapReady &&
+            observations.map((observation) => (
+              <Marker
+                key={observation.id}
+                position={[observation.geolocation.latitude, observation.geolocation.longitude]}
+              >
+                <Popup>
+                  <div className="max-w-xs">
+                    <div className="relative aspect-video w-full mb-2 bg-muted rounded-sm overflow-hidden">
                       <img
-                        src={selectedObservation.imageUrl || "/placeholder.svg"}
-                        alt={selectedObservation.comment}
+                        src={observation.imageUrl || "/placeholder.svg"}
+                        alt={observation.comment}
                         className="object-cover w-full h-full"
                         onError={(e) => {
                           ;(e.target as HTMLImageElement).src = "/placeholder.svg"
@@ -137,45 +145,48 @@ export function ObservationMap({ height = "500px" }: { height?: string }) {
                       />
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <Calendar className="h-4 w-4 mr-1" />
-                        {formatDate(selectedObservation.timestamp)}
-                      </div>
+                    <h3 className="font-medium text-sm mb-1 line-clamp-2">{observation.comment}</h3>
+
+                    <div className="flex items-center text-xs text-muted-foreground mb-1">
+                      <Calendar className="h-3 w-3 mr-1" />
+                      {formatDate(observation.timestamp)}
+                    </div>
+
+                    <div className="flex items-center text-xs text-muted-foreground mb-2">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      {observation.geolocation.latitude.toFixed(4)}, {observation.geolocation.longitude.toFixed(4)}
+                    </div>
+
+                    <div className="flex justify-between items-center">
                       <Badge
                         variant={
-                          selectedObservation.status === "Approved"
+                          observation.status === "Approved"
                             ? "default"
-                            : selectedObservation.status === "Rejected"
+                            : observation.status === "Rejected"
                               ? "destructive"
                               : "outline"
                         }
                       >
-                        {selectedObservation.status}
+                        {observation.status}
                       </Badge>
-                    </div>
 
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {selectedObservation.geolocation.latitude.toFixed(4)},{" "}
-                      {selectedObservation.geolocation.longitude.toFixed(4)}
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
+                        onClick={() => router.push(`/observation/${observation.id}`)}
+                      >
+                        View Details
+                        <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
                     </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => router.push(`/observation/${selectedObservation.id}`)}
-                    >
-                      View Details
-                      <ExternalLink className="h-4 w-4 ml-2" />
-                    </Button>
                   </div>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
-        </>
+                </Popup>
+              </Marker>
+            ))}
+
+          {mapReady && <RecenterAutomatically observations={observations} />}
+        </MapContainer>
       )}
     </div>
   )

@@ -70,20 +70,3 @@ export async function removeLocalObservation(id: string): Promise<void> {
     throw error
   }
 }
-
-// Add a new function to update a local observation
-export async function updateLocalObservation(id: string, updates: Partial<LocalObservation>): Promise<void> {
-  try {
-    // Check if we're in a browser environment
-    if (typeof window === "undefined") return
-
-    const observations = await getLocalObservations()
-    const updatedObservations = observations.map((obs) => (obs.id === id ? { ...obs, ...updates } : obs))
-
-    localStorage.setItem(LOCAL_OBSERVATIONS_KEY, JSON.stringify(updatedObservations))
-    console.log(`Updated local observation ${id} with:`, updates)
-  } catch (error) {
-    console.error("Error updating local observation:", error)
-    throw error
-  }
-}

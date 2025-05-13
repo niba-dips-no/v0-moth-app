@@ -6,7 +6,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Camera, ArrowLeft } from "lucide-react"
-import { ObservationMap } from "./observation-map"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+
+// Dynamically import the ObservationMap component with SSR disabled
+const ObservationMap = dynamic(() => import("@/components/map/observation-map").then((mod) => mod.ObservationMap), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[500px] w-full" />,
+})
 
 export function MapContent() {
   const { t } = useTranslation()
@@ -40,9 +47,7 @@ export function MapContent() {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="map" className="m-0">
-              <div className="h-[500px]">
-                <ObservationMap height="500px" />
-              </div>
+              <ObservationMap height="500px" />
             </TabsContent>
             <TabsContent value="satellite" className="m-0">
               <div className="h-[500px] bg-muted flex items-center justify-center">

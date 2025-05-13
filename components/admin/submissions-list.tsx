@@ -8,8 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { useTranslation } from "@/hooks/use-translation"
-import { fetchObservations } from "@/lib/api"
-import { simpleUpdateObservationStatus } from "@/lib/api-simple"
+import { fetchObservations, updateObservationStatus } from "@/lib/api"
 import { MapPin, Calendar, Clock, Smartphone, Check, X, AlertCircle, ExternalLink, Loader2 } from "lucide-react"
 import Image from "next/image"
 
@@ -71,34 +70,26 @@ export function SubmissionsList() {
     return date.toLocaleTimeString()
   }
 
-  // Update the updateStatus function to use the simple update method
   const updateStatus = async (id: string, status: string) => {
     // Set loading state for this specific observation
     setUpdatingStatus((prev) => ({ ...prev, [id]: true }))
 
     try {
-      console.log(`Updating observation ${id} to status: ${status}`)
+      // Call the API to update the status in the database
+      await updateObservationStatus(id, status)
 
-      // Call the simple update function
-      await simpleUpdateObservationStatus(id, status)
-
-      // Update the local state immediately for better UX
+      // Update the local state
       setObservations((prev) => prev.map((obs) => (obs.id === id ? { ...obs, status } : obs)))
 
       toast({
         title: "Status Updated",
-        description: `Observation ${id.substring(0, 8)}... marked as ${status}`,
+        description: `Observation ${id} marked as ${status}`,
       })
 
       // Close dialog if open
       if (selectedObservation?.id === id) {
         setSelectedObservation(null)
       }
-
-      // Reload observations to ensure we have the latest data
-      setTimeout(() => {
-        loadObservations()
-      }, 1000)
     } catch (error) {
       console.error("Error updating status:", error)
       toast({

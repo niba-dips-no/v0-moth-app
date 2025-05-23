@@ -1,77 +1,90 @@
 "use client"
 
-import { useState } from "react"
-import { MapContainer, TileLayer, Marker, Circle } from "react-leaflet"
+import { useEffect, useRef } from "react"
+import L from "leaflet"
 import "leaflet/dist/leaflet.css"
-import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css"
-import "leaflet-defaulticon-compatibility"
+
+// Fix for default markers in Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+})
 
 interface MiniMapProps {
   latitude: number
   longitude: number
   accuracy?: number
   height?: string
-  width?: string
   zoom?: number
-  className?: string
 }
 
-export function MiniMap({
-  latitude,
-  longitude,
-  accuracy,
-  height = "200px",
-  width = "100%",
-  zoom = 13,
-  className = "",
-}: MiniMapProps) {
-  const [mapReady, setMapReady] = useState(false)
+export function MiniMap({ latitude, longitude, accuracy, height = "300px", zoom = 13 }: MiniMapProps) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<L.Map | null>(null)
 
-  // Handle when map is ready
-  const handleMapReady = () => {
-    setMapReady(true)
-  }
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return
 
-  // Validate coordinates
-  const validCoordinates = !isNaN(latitude) && !isNaN(longitude)
+    // Initialize the map with the observation's coordinates
+    const map = L.map(mapRef.current).setView([latitude, longitude], zoom)
 
-  if (!validCoordinates) {
-    return (
-      <div className={`bg-muted flex items-center justify-center rounded-md ${className}`} style={{ height, width }}>
-        <p className="text-xs text-muted-foreground">Invalid coordinates</p>
-      </div>
-    )
-  }
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map)
 
-  return (
-    <div className={`rounded-md overflow-hidden ${className}`} style={{ height, width }}>
-      <MapContainer
-        center={[latitude, longitude]}
-        zoom={zoom}
-        style={{ height: "100%", width: "100%" }}
-        zoomControl={false}
-        attributionControl={false}
-        whenReady={handleMapReady}
-      >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+    // Add marker at the observation location
+    const marker = L.marker([latitude, longitude]).addTo(map)
+    marker.bindPopup(`Photo taken here<br>Lat: ${latitude.toFixed(4)}<br>Lng: ${longitude.toFixed(4)}`)
 
-        {mapReady && (
-          <>
-            <Marker position={[latitude, longitude]} />
+    // Add accuracy circle if available
+    if (accuracy && accuracy > 0) {
+      L.circle([latitude, longitude], {
+        color: "blue",
+        fillColor: "#3388ff",
+        fillOpacity: 0.2,
+        radius: accuracy,
+      }).addTo(map)
+    }
 
-            {accuracy && accuracy > 0 && (
-              <Circle
-                center={[latitude, longitude]}
-                radius={accuracy}
-                pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.1 }}
-              />
-            )}
-          </>
-        )}
-      </MapContainer>
-    </div>
-  )
+    mapInstanceRef.current = map
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
+    }
+  }, [latitude, longitude, accuracy, zoom])
+
+  // Update map view when coordinates change
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setView([latitude, longitude], zoom)
+
+      // Clear existing markers and add new one
+      mapInstanceRef.current.eachLayer((layer) => {
+        if (layer instanceof L.Marker || layer instanceof L.Circle) {
+          mapInstanceRef.current?.removeLayer(layer)
+        }
+      })
+
+      // Add new marker
+      const marker = L.marker([latitude, longitude]).addTo(mapInstanceRef.current)
+      marker.bindPopup(`Photo taken here<br>Lat: ${latitude.toFixed(4)}<br>Lng: ${longitude.toFixed(4)}`)
+
+      // Add accuracy circle if available
+      if (accuracy && accuracy > 0) {
+        L.circle([latitude, longitude], {
+          color: "blue",
+          fillColor: "#3388ff",
+          fillOpacity: 0.2,
+          radius: accuracy,
+        }).addTo(mapInstanceRef.current)
+      }
+    }
+  }, [latitude, longitude, accuracy, zoom])
+
+  return <div ref={mapRef} style={{ height, width: "100%" }} />
 }
-
-// Default export for dynamic import
-export default { MiniMap }

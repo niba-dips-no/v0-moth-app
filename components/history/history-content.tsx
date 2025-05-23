@@ -134,6 +134,17 @@ export function HistoryContent() {
     setImageErrors((prev) => ({ ...prev, [id]: true }))
   }
 
+  const formatCoordinates = (lat: number, lng: number) => {
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+  }
+
+  const getLocationAccuracy = (accuracy: number) => {
+    if (accuracy < 10) return "Very accurate"
+    if (accuracy < 50) return "Accurate"
+    if (accuracy < 100) return "Moderate"
+    return "Low accuracy"
+  }
+
   return (
     <div className="w-full max-w-md">
       <div className="flex justify-between items-center mb-4">
@@ -221,9 +232,18 @@ export function HistoryContent() {
                     <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
                     {formatTime(observation.timestamp)}
                   </div>
-                  <div className="flex items-center">
-                    <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
-                    {observation.geolocation.latitude.toFixed(4)}, {observation.geolocation.longitude.toFixed(4)}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <span>
+                        {formatCoordinates(observation.geolocation.latitude, observation.geolocation.longitude)}
+                      </span>
+                    </div>
+                    {observation.geolocation.accuracy && (
+                      <Badge variant="secondary" className="text-xs">
+                        {getLocationAccuracy(observation.geolocation.accuracy)}
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
@@ -236,12 +256,20 @@ export function HistoryContent() {
                       onClick={() => setSelectedObservation(observation)}
                     >
                       <Map className="h-4 w-4 mr-2" />
-                      {t("viewOnMap")}
+                      {t("viewOnMap")} -{" "}
+                      {formatCoordinates(observation.geolocation.latitude, observation.geolocation.longitude)}
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>{observation.comment}</DialogTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Taken at:{" "}
+                        {formatCoordinates(observation.geolocation.latitude, observation.geolocation.longitude)}
+                        {observation.geolocation.accuracy && (
+                          <span className="ml-2">(±{observation.geolocation.accuracy.toFixed(0)}m)</span>
+                        )}
+                      </p>
                     </DialogHeader>
                     <div className="h-[300px]">
                       <MiniMap

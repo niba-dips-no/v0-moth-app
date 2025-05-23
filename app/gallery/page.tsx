@@ -10,8 +10,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { useTranslation } from "@/hooks/use-translation"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { useRouter } from "next/navigation"
-import { Upload, X, Check, MapPin, Loader2 } from "lucide-react"
+import { Upload, X, Check, Loader2, AlertTriangle } from "lucide-react"
 import { saveLocalObservation } from "@/lib/local-storage"
+import { validateImageFile, validateObservationData, sanitizeInput } from "@/lib/validation"
+import { ErrorDisplay } from "@/components/error-display"
 
 export default function GalleryPage() {
   const { t } = useTranslation()
@@ -23,6 +25,7 @@ export default function GalleryPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [hasGeoLocation, setHasGeoLocation] = useState(true)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -31,6 +34,15 @@ export default function GalleryPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setValidationErrors([])
+
+    // Validate the selected file
+    const validation = await validateImageFile(file)
+    if (!validation.isValid) {
+      setValidationErrors(validation.errors)
+      return
+    }
+
     setSelectedFile(file)
 
     // Read the file as data URL for preview
@@ -38,15 +50,7 @@ export default function GalleryPage() {
     reader.onload = async (event) => {
       const imageDataUrl = event.target?.result as string
       setSelectedImage(imageDataUrl)
-
-      // Check if image has geolocation data
-      try {
-        // You can add EXIF extraction here if needed
-        setHasGeoLocation(!!position)
-      } catch (error) {
-        console.error("Error checking geolocation:", error)
-        setHasGeoLocation(false)
-      }
+      setHasGeoLocation(!!position)
     }
     reader.readAsDataURL(file)
   }
@@ -57,33 +61,46 @@ export default function GalleryPage() {
     }
   }
 
-  const handleSubmit = async () => {
+  const validateForm = (): boolean => {
+    const errors: string[] = []
+
     if (!selectedImage || !selectedFile) {
-      toast({
-        title: t("missingImage"),
-        description: t("pleaseSelectImage"),
-        variant: "destructive",
-      })
-      return
+      errors.push("Please select an image")
     }
 
     if (!position) {
-      toast({
-        title: t("missingLocation"),
-        description: t("locationRequired"),
-        variant: "destructive",
-      })
+      errors.push("Location data is required. Please enable location services.")
+    }
+
+    // Validate observation data
+    const observationValidation = validateObservationData({
+      comment,
+      latitude: position?.coords.latitude,
+      longitude: position?.coords.longitude,
+    })
+
+    if (!observationValidation.isValid) {
+      errors.push(...observationValidation.errors)
+    }
+
+    setValidationErrors(errors)
+    return errors.length === 0
+  }
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
       return
     }
 
     setIsSubmitting(true)
+    setValidationErrors([])
 
     try {
       const timestamp = new Date().toISOString()
       const geolocation = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
+        latitude: position!.coords.latitude,
+        longitude: position!.coords.longitude,
+        accuracy: position!.coords.accuracy,
       }
 
       const deviceInfo = {
@@ -92,10 +109,13 @@ export default function GalleryPage() {
         language: navigator.language,
       }
 
+      // Sanitize comment
+      const sanitizedComment = sanitizeInput(comment)
+
       // Create FormData for server-side upload
       const formData = new FormData()
-      formData.append("image", selectedFile)
-      formData.append("comment", comment)
+      formData.append("image", selectedFile!)
+      formData.append("comment", sanitizedComment)
       formData.append("timestamp", timestamp)
       formData.append("latitude", geolocation.latitude.toString())
       formData.append("longitude", geolocation.longitude.toString())
@@ -108,38 +128,43 @@ export default function GalleryPage() {
         body: formData,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Upload failed")
-      }
-
       const result = await response.json()
+
+      if (!response.ok) {
+        // Handle different error types
+        if (result.code === "INVALID_IMAGE" || result.code === "INVALID_DATA") {
+          setValidationErrors(result.details || [result.error])
+          return
+        }
+        throw new Error(result.error || "Upload failed")
+      }
 
       // Save to local storage for history
       await saveLocalObservation({
         id: result.id,
         imageUrl: result.imageUrl || selectedImage,
-        comment,
+        comment: sanitizedComment,
         timestamp,
         geolocation,
         status: "Pending",
       })
 
       toast({
-        title: t("submissionSuccess"),
-        description: new Date().toLocaleString(),
+        title: "Success!",
+        description: result.message || "Your moth observation has been submitted successfully.",
       })
 
       // Reset form and navigate back
       setSelectedImage(null)
       setSelectedFile(null)
       setComment("")
+      setValidationErrors([])
       router.push("/")
     } catch (error) {
       console.error("Submission error:", error)
       toast({
-        title: t("submissionError"),
-        description: String(error),
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -147,11 +172,30 @@ export default function GalleryPage() {
     }
   }
 
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    if (value.length <= 1000) {
+      setComment(value)
+    }
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center p-4">
       <Card className="w-full max-w-md">
         <CardContent className="p-4">
-          <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleFileChange} />
+          <ErrorDisplay
+            errors={validationErrors}
+            onDismiss={() => setValidationErrors([])}
+            title="Please fix the following issues:"
+          />
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
 
           {selectedImage ? (
             <div className="relative">
@@ -163,53 +207,62 @@ export default function GalleryPage() {
                 onClick={() => {
                   setSelectedImage(null)
                   setSelectedFile(null)
+                  setValidationErrors([])
                 }}
               >
                 <X className="h-4 w-4" />
               </Button>
 
               {!hasGeoLocation && (
-                <div className="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded-md flex items-center text-xs text-amber-600">
-                  <MapPin className="h-3 w-3 mr-1" />
-                  {t("imageMissingGeolocationTitle")}
+                <div className="absolute bottom-2 right-2 bg-amber-100 px-2 py-1 rounded-md flex items-center text-xs text-amber-800">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  No location data
                 </div>
               )}
             </div>
           ) : (
             <div
-              className="flex flex-col items-center justify-center h-64 bg-muted rounded-md cursor-pointer"
+              className="flex flex-col items-center justify-center h-64 bg-muted rounded-md cursor-pointer border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 transition-colors"
               onClick={handleSelectImage}
             >
               <Upload className="h-12 w-12 mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">{t("selectPhoto")}</p>
+              <p className="text-muted-foreground text-center">
+                Select an image
+                <br />
+                <span className="text-xs">Max 10MB • JPEG, PNG, WebP</span>
+              </p>
             </div>
           )}
 
           {selectedImage && (
-            <Textarea
-              className="mt-4"
-              placeholder={t("comment")}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
+            <div className="mt-4">
+              <Textarea
+                placeholder="Add a comment about your moth observation (optional)"
+                value={comment}
+                onChange={handleCommentChange}
+                className="resize-none"
+                rows={3}
+              />
+              <div className="text-xs text-muted-foreground mt-1 text-right">{comment.length}/1000 characters</div>
+            </div>
           )}
         </CardContent>
 
         <CardFooter className="flex justify-between">
           <Button variant="outline" onClick={() => router.push("/")}>
-            {t("cancel")}
+            Cancel
           </Button>
 
           {selectedImage && (
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || validationErrors.length > 0}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("submitting")}
+                  Uploading...
                 </>
               ) : (
                 <>
-                  {t("submit")}
+                  Submit
                   <Check className="ml-2 h-4 w-4" />
                 </>
               )}

@@ -9,7 +9,6 @@ import { useTranslation } from "@/hooks/use-translation"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { useRouter } from "next/navigation"
 import { Camera, X, Check, Loader2 } from "lucide-react"
-import { submitObservation } from "@/lib/api"
 import { saveLocalObservation } from "@/lib/local-storage"
 
 export default function CameraPage() {
@@ -20,6 +19,7 @@ export default function CameraPage() {
 
   const [isCameraOpen, setIsCameraOpen] = useState(false)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
+  const [capturedFile, setCapturedFile] = useState<File | null>(null)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -75,26 +75,32 @@ export default function CameraPage() {
       const video = videoRef.current
       const canvas = canvasRef.current
 
-      // Set canvas dimensions to match video
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
 
-      // Draw video frame to canvas
       const context = canvas.getContext("2d")
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-        // Convert canvas to data URL (JPEG format, 0.8 quality)
         try {
           const imageDataUrl = canvas.toDataURL("image/jpeg", 0.8)
-          console.log("Image captured, size:", Math.round(imageDataUrl.length / 1024), "KB")
           setCapturedImage(imageDataUrl)
-          setIsCameraOpen(false)
 
-          // Set debug info
-          setDebugInfo(
-            `Image captured: ${Math.round(imageDataUrl.length / 1024)} KB, format: ${imageDataUrl.substring(0, 30)}...`,
+          // Convert canvas to blob and then to File
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" })
+                setCapturedFile(file)
+                console.log("Photo captured as file:", file.name, file.size, "bytes")
+              }
+            },
+            "image/jpeg",
+            0.8,
           )
+
+          setIsCameraOpen(false)
+          setDebugInfo(`Image captured: ${Math.round(imageDataUrl.length / 1024)} KB`)
         } catch (error) {
           console.error("Error converting canvas to data URL:", error)
           toast({
@@ -108,7 +114,7 @@ export default function CameraPage() {
   }
 
   const handleSubmit = async () => {
-    if (!capturedImage) {
+    if (!capturedFile) {
       toast({
         title: "Missing Image",
         description: "Please capture an image first",
@@ -145,42 +151,46 @@ export default function CameraPage() {
       }
 
       setUploadProgress(30)
-      setDebugInfo("Preparing observation data...")
+      setDebugInfo("Preparing form data...")
 
-      // Create observation object
-      const observation = {
-        image: capturedImage,
-        comment,
-        timestamp,
-        geolocation,
-        deviceInfo,
+      // Create FormData for the API request
+      const formData = new FormData()
+      formData.append("image", capturedFile)
+      formData.append("comment", comment)
+      formData.append("latitude", geolocation.latitude.toString())
+      formData.append("longitude", geolocation.longitude.toString())
+      formData.append("accuracy", geolocation.accuracy.toString())
+      formData.append("deviceInfo", JSON.stringify(deviceInfo))
+      formData.append("timestamp", timestamp)
+
+      setUploadProgress(50)
+      setDebugInfo("Uploading to server...")
+
+      // Upload via API route
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      setUploadProgress(80)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Upload failed")
       }
 
-      console.log("Submitting observation...")
-      setDebugInfo("Uploading to Supabase...")
+      const result = await response.json()
 
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          const newProgress = Math.min(prev + 5, 90)
-          return newProgress
-        })
-      }, 300)
-
-      // Submit to Supabase
-      const { id, imageUrl } = await submitObservation(observation)
-
-      clearInterval(progressInterval)
       setUploadProgress(95)
-      setDebugInfo(`Observation submitted, ID: ${id}, saving locally...`)
+      setDebugInfo(`Observation submitted, ID: ${result.id}, saving locally...`)
 
-      console.log("Observation submitted successfully, ID:", id)
-      console.log("Image URL:", imageUrl)
+      console.log("Observation submitted successfully, ID:", result.id)
+      console.log("Image URL:", result.imageUrl)
 
       // Save to local storage for history
       await saveLocalObservation({
-        id,
-        imageUrl: imageUrl || capturedImage, // Use the returned URL or fallback to the data URL
+        id: result.id,
+        imageUrl: result.imageUrl,
         comment,
         timestamp,
         geolocation,
@@ -197,6 +207,7 @@ export default function CameraPage() {
 
       // Reset form and navigate back
       setCapturedImage(null)
+      setCapturedFile(null)
       setComment("")
       router.push("/")
     } catch (error) {
@@ -235,7 +246,10 @@ export default function CameraPage() {
                 variant="outline"
                 size="icon"
                 className="absolute top-2 right-2 bg-white/80"
-                onClick={() => setCapturedImage(null)}
+                onClick={() => {
+                  setCapturedImage(null)
+                  setCapturedFile(null)
+                }}
               >
                 <X className="h-4 w-4" />
               </Button>

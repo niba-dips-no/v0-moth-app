@@ -11,8 +11,6 @@ import { useTranslation } from "@/hooks/use-translation"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { useRouter } from "next/navigation"
 import { Upload, X, Check, MapPin, Loader2 } from "lucide-react"
-import { submitObservation } from "@/lib/api"
-import { extractExifData } from "@/lib/exif"
 import { saveLocalObservation } from "@/lib/local-storage"
 
 export default function GalleryPage() {
@@ -22,6 +20,7 @@ export default function GalleryPage() {
   const router = useRouter()
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasGeoLocation, setHasGeoLocation] = useState(true)
@@ -32,7 +31,9 @@ export default function GalleryPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Read the file as data URL
+    setSelectedFile(file)
+
+    // Read the file as data URL for preview
     const reader = new FileReader()
     reader.onload = async (event) => {
       const imageDataUrl = event.target?.result as string
@@ -40,10 +41,10 @@ export default function GalleryPage() {
 
       // Check if image has geolocation data
       try {
-        const exifData = await extractExifData(file)
-        setHasGeoLocation(!!exifData.latitude && !!exifData.longitude)
+        // You can add EXIF extraction here if needed
+        setHasGeoLocation(!!position)
       } catch (error) {
-        console.error("Error extracting EXIF data:", error)
+        console.error("Error checking geolocation:", error)
         setHasGeoLocation(false)
       }
     }
@@ -57,10 +58,10 @@ export default function GalleryPage() {
   }
 
   const handleSubmit = async () => {
-    if (!selectedImage) {
+    if (!selectedImage || !selectedFile) {
       toast({
-        title: "Missing Image",
-        description: "Please select an image first",
+        title: t("missingImage"),
+        description: t("pleaseSelectImage"),
         variant: "destructive",
       })
       return
@@ -68,8 +69,8 @@ export default function GalleryPage() {
 
     if (!position) {
       toast({
-        title: "Missing Location",
-        description: "Location data is required. Please enable location services.",
+        title: t("missingLocation"),
+        description: t("locationRequired"),
         variant: "destructive",
       })
       return
@@ -91,22 +92,33 @@ export default function GalleryPage() {
         language: navigator.language,
       }
 
-      // Create observation object
-      const observation = {
-        image: selectedImage,
-        comment,
-        timestamp,
-        geolocation,
-        deviceInfo,
+      // Create FormData for server-side upload
+      const formData = new FormData()
+      formData.append("image", selectedFile)
+      formData.append("comment", comment)
+      formData.append("timestamp", timestamp)
+      formData.append("latitude", geolocation.latitude.toString())
+      formData.append("longitude", geolocation.longitude.toString())
+      formData.append("accuracy", geolocation.accuracy.toString())
+      formData.append("deviceInfo", JSON.stringify(deviceInfo))
+
+      // Use our server-side API route
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Upload failed")
       }
 
-      // Submit to Supabase
-      const { id, imageUrl } = await submitObservation(observation)
+      const result = await response.json()
 
       // Save to local storage for history
       await saveLocalObservation({
-        id,
-        imageUrl: imageUrl || selectedImage,
+        id: result.id,
+        imageUrl: result.imageUrl || selectedImage,
         comment,
         timestamp,
         geolocation,
@@ -120,6 +132,7 @@ export default function GalleryPage() {
 
       // Reset form and navigate back
       setSelectedImage(null)
+      setSelectedFile(null)
       setComment("")
       router.push("/")
     } catch (error) {
@@ -147,7 +160,10 @@ export default function GalleryPage() {
                 variant="outline"
                 size="icon"
                 className="absolute top-2 right-2 bg-white/80"
-                onClick={() => setSelectedImage(null)}
+                onClick={() => {
+                  setSelectedImage(null)
+                  setSelectedFile(null)
+                }}
               >
                 <X className="h-4 w-4" />
               </Button>

@@ -47,90 +47,34 @@ export async function submitObservation(data: ObservationData): Promise<{ id: st
     // Upload the image to Supabase Storage
     console.log("Uploading image to Supabase storage...")
 
-    // First check if the bucket exists
-    const { data: buckets, error: bucketsError } = await getSupabase().storage.listBuckets()
+    // Create FormData for server-side upload
+    const formData = new FormData()
+    const blob = new Blob([binaryData], { type: "image/jpeg" })
+    const file = new File([blob], fileName, { type: "image/jpeg" })
 
-    if (bucketsError) {
-      console.error("Error listing buckets:", bucketsError)
-      throw bucketsError
-    }
+    formData.append("image", file)
+    formData.append("comment", data.comment)
+    formData.append("timestamp", data.timestamp)
+    formData.append("latitude", data.geolocation?.latitude?.toString() || "0")
+    formData.append("longitude", data.geolocation?.longitude?.toString() || "0")
+    formData.append("accuracy", data.geolocation?.accuracy?.toString() || "0")
+    formData.append("deviceInfo", JSON.stringify(data.deviceInfo))
 
-    const observationsBucketExists = buckets?.some((bucket) => bucket.name === "observations")
-    console.log("Observations bucket exists:", observationsBucketExists)
-
-    if (!observationsBucketExists) {
-      console.log("Creating observations bucket...")
-      const { error: createBucketError } = await getSupabase().storage.createBucket("observations", {
-        public: true,
-      })
-
-      if (createBucketError) {
-        console.error("Error creating bucket:", createBucketError)
-        throw createBucketError
-      }
-    }
-
-    // Upload the file
-    const { data: uploadData, error: uploadError } = await getSupabase()
-      .storage.from("observations")
-      .upload(`public/${fileName}`, binaryData, {
-        contentType: "image/jpeg",
-        upsert: false,
-      })
-
-    if (uploadError) {
-      console.error("Upload error:", uploadError)
-      throw uploadError
-    }
-
-    console.log("Image uploaded successfully:", uploadData?.path)
-
-    // Get the public URL for the uploaded image
-    const { data: urlData } = getSupabase().storage.from("observations").getPublicUrl(`public/${fileName}`)
-    const imageUrl = urlData.publicUrl
-    console.log("Image public URL:", imageUrl)
-
-    // Get the current user (if authenticated)
-    const {
-      data: { user },
-    } = await getSupabase().auth.getUser()
-    console.log("Current user:", user?.id || "anonymous")
-
-    // Now insert the observation record
-    console.log("Inserting observation record into database...")
-    console.log("Observation data:", {
-      image_url: imageUrl,
-      comment: data.comment,
-      latitude: data.geolocation?.latitude,
-      longitude: data.geolocation?.longitude,
-      accuracy: data.geolocation?.accuracy,
-      status: "Pending",
-      user_id: user?.id || null,
+    // Use our server-side API route
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
     })
 
-    const { data: observation, error } = await getSupabase()
-      .from("observations")
-      .insert({
-        image_url: imageUrl,
-        comment: data.comment,
-        created_at: data.timestamp,
-        latitude: data.geolocation?.latitude || 0,
-        longitude: data.geolocation?.longitude || 0,
-        accuracy: data.geolocation?.accuracy || null,
-        device_info: data.deviceInfo,
-        status: "Pending",
-        user_id: user?.id || null,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Database error:", error)
-      throw error
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || "Upload failed")
     }
 
-    console.log("Observation saved successfully:", observation)
-    return { id: observation.id, imageUrl }
+    const result = await response.json()
+    console.log("Upload successful:", result)
+
+    return { id: result.id, imageUrl: result.imageUrl }
   } catch (error) {
     console.error("Error submitting observation:", error)
     throw error

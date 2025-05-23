@@ -10,10 +10,11 @@ import { useToast } from "@/components/ui/use-toast"
 import { useTranslation } from "@/hooks/use-translation"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { useRouter } from "next/navigation"
-import { Upload, X, Check, Loader2, AlertTriangle } from "lucide-react"
+import { Upload, X, Check, Loader2, MapPin } from "lucide-react"
 import { saveLocalObservation } from "@/lib/local-storage"
 import { validateImageFile, validateObservationData, sanitizeInput } from "@/lib/validation"
 import { ErrorDisplay } from "@/components/error-display"
+import { extractExifData } from "@/lib/exif"
 
 export default function GalleryPage() {
   const { t } = useTranslation()
@@ -26,7 +27,12 @@ export default function GalleryPage() {
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
-  const [hasGeoLocation, setHasGeoLocation] = useState(true)
+  const [imageLocation, setImageLocation] = useState<{
+    latitude: number
+    longitude: number
+    accuracy?: number
+    source: "exif" | "gps" | "none"
+  } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -45,12 +51,56 @@ export default function GalleryPage() {
 
     setSelectedFile(file)
 
+    // Extract EXIF data first
+    console.log("Extracting EXIF data from image...")
+    const exifData = await extractExifData(file)
+
+    let locationData = null
+
+    if (exifData.latitude && exifData.longitude) {
+      // Use EXIF location data
+      locationData = {
+        latitude: exifData.latitude,
+        longitude: exifData.longitude,
+        accuracy: 10, // EXIF data is usually quite accurate
+        source: "exif" as const,
+      }
+      console.log("Using EXIF location:", locationData)
+      toast({
+        title: "Location found in image",
+        description: `Using GPS coordinates from image: ${exifData.latitude.toFixed(4)}, ${exifData.longitude.toFixed(4)}`,
+      })
+    } else if (position) {
+      // Fall back to current GPS location
+      locationData = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        source: "gps" as const,
+      }
+      console.log("Using current GPS location:", locationData)
+      toast({
+        title: "Using current location",
+        description: "No GPS data found in image, using your current location",
+        variant: "destructive",
+      })
+    } else {
+      // No location available
+      locationData = {
+        latitude: 0,
+        longitude: 0,
+        source: "none" as const,
+      }
+      console.log("No location data available")
+    }
+
+    setImageLocation(locationData)
+
     // Read the file as data URL for preview
     const reader = new FileReader()
     reader.onload = async (event) => {
       const imageDataUrl = event.target?.result as string
       setSelectedImage(imageDataUrl)
-      setHasGeoLocation(!!position)
     }
     reader.readAsDataURL(file)
   }
@@ -68,15 +118,15 @@ export default function GalleryPage() {
       errors.push("Please select an image")
     }
 
-    if (!position) {
-      errors.push("Location data is required. Please enable location services.")
+    if (!imageLocation || imageLocation.source === "none") {
+      errors.push("Location data is required. Please select an image with GPS data or enable location services.")
     }
 
     // Validate observation data
     const observationValidation = validateObservationData({
       comment,
-      latitude: position?.coords.latitude,
-      longitude: position?.coords.longitude,
+      latitude: imageLocation?.latitude,
+      longitude: imageLocation?.longitude,
     })
 
     if (!observationValidation.isValid) {
@@ -88,7 +138,7 @@ export default function GalleryPage() {
   }
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
+    if (!validateForm() || !imageLocation) {
       return
     }
 
@@ -98,15 +148,16 @@ export default function GalleryPage() {
     try {
       const timestamp = new Date().toISOString()
       const geolocation = {
-        latitude: position!.coords.latitude,
-        longitude: position!.coords.longitude,
-        accuracy: position!.coords.accuracy,
+        latitude: imageLocation.latitude,
+        longitude: imageLocation.longitude,
+        accuracy: imageLocation.accuracy || 0,
       }
 
       const deviceInfo = {
         userAgent: navigator.userAgent,
         platform: navigator.platform,
         language: navigator.language,
+        locationSource: imageLocation.source,
       }
 
       // Sanitize comment
@@ -159,6 +210,7 @@ export default function GalleryPage() {
       setSelectedFile(null)
       setComment("")
       setValidationErrors([])
+      setImageLocation(null)
       router.push("/")
     } catch (error) {
       console.error("Submission error:", error)
@@ -177,6 +229,10 @@ export default function GalleryPage() {
     if (value.length <= 1000) {
       setComment(value)
     }
+  }
+
+  const formatCoordinates = (lat: number, lng: number) => {
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`
   }
 
   return (
@@ -208,15 +264,22 @@ export default function GalleryPage() {
                   setSelectedImage(null)
                   setSelectedFile(null)
                   setValidationErrors([])
+                  setImageLocation(null)
                 }}
               >
                 <X className="h-4 w-4" />
               </Button>
 
-              {!hasGeoLocation && (
-                <div className="absolute bottom-2 right-2 bg-amber-100 px-2 py-1 rounded-md flex items-center text-xs text-amber-800">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  No location data
+              {imageLocation && (
+                <div className="absolute bottom-2 right-2 bg-white/90 px-2 py-1 rounded-md flex items-center text-xs">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  <span className={imageLocation.source === "exif" ? "text-green-700" : "text-amber-700"}>
+                    {imageLocation.source === "exif"
+                      ? "Image GPS"
+                      : imageLocation.source === "gps"
+                        ? "Current GPS"
+                        : "No GPS"}
+                  </span>
                 </div>
               )}
             </div>
@@ -231,6 +294,25 @@ export default function GalleryPage() {
                 <br />
                 <span className="text-xs">Max 10MB • JPEG, PNG, WebP</span>
               </p>
+            </div>
+          )}
+
+          {selectedImage && imageLocation && (
+            <div className="mt-4 p-3 bg-muted rounded-md">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">Location:</span>
+                <span className={imageLocation.source === "exif" ? "text-green-700" : "text-amber-700"}>
+                  {imageLocation.source === "exif"
+                    ? "📍 From image GPS"
+                    : imageLocation.source === "gps"
+                      ? "📱 Current location"
+                      : "❌ No location"}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {formatCoordinates(imageLocation.latitude, imageLocation.longitude)}
+                {imageLocation.accuracy && ` (±${imageLocation.accuracy.toFixed(0)}m)`}
+              </div>
             </div>
           )}
 

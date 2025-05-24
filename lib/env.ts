@@ -39,3 +39,12 @@ export function isDevelopment(): boolean {
 export function isProduction(): boolean {
   return getEnv("NODE_ENV") === "production"
 }
+
+// Tenant functions (for future white-label implementation)
+export function getTenantId(): string {
+  return getEnv("NEXT_PUBLIC_TENANT_ID", "malerjakt")
+}
+
+export function getAppName(): string {
+  return getEnv("NEXT_PUBLIC_APP_NAME", "Målerjakt")
+}
